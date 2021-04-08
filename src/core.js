@@ -75,13 +75,15 @@ function Promise(fn) {
   doResolve(fn, this)
 }
 Promise._onHandle = null
-Promise._onReject = null
+Promise._onReject = null //这是什么？
 Promise._noop = noop
 
 Promise.prototype.then = function (onFulfilled, onRejected) {
   if (this.constructor !== Promise) {
+    //new Promise 的constructor怎么会不是promise呢？直接修改.prototype.constructor的意义何在？
     return safeThen(this, onFulfilled, onRejected)
   }
+  //then 是会新建一个promise 的，所以是要同一条原型链下的一级then有多个 _deferredState才会为复数
   var res = new Promise(noop)
   handle(this, new Handler(onFulfilled, onRejected, res))
   return res
@@ -140,6 +142,7 @@ function handleResolved(self, deferred) {
 function resolve(self, newValue) {
   // Promise Resolution Procedure: https://github.com/promises-aplus/promises-spec#the-promise-resolution-procedure
   if (newValue === self) {
+    // 防止resolve 的值传入实例本身
     return reject(
       self,
       new TypeError('A promise cannot be resolved with itself.')
@@ -149,26 +152,33 @@ function resolve(self, newValue) {
     newValue &&
     (typeof newValue === 'object' || typeof newValue === 'function')
   ) {
+    //obj.then
     var then = getThen(newValue)
     if (then === IS_ERROR) {
       return reject(self, LAST_ERROR)
     }
     if (then === self.then && newValue instanceof Promise) {
+      //用于处理一个 Promise实例
       self._state = 3
       self._value = newValue
       finale(self)
       return
     } else if (typeof then === 'function') {
+      //如果resolve传入的是Promise实例并且包含then方法则调用doResolve执行这个实例的构造函数
+      // 把then当作构造函数并且把this指向这个then的对象
       doResolve(then.bind(newValue), self)
       return
     }
   }
+  //若是普通值而不是promise实例
+  //1：fulfilled
   self._state = 1
   self._value = newValue
   finale(self)
 }
 
 function reject(self, newValue) {
+  // reject的时候状态变为2
   self._state = 2
   self._value = newValue
   if (Promise._onReject) {
@@ -176,13 +186,22 @@ function reject(self, newValue) {
   }
   finale(self)
 }
+
+//finale相当于handle的中转站，根据不同的情况调用handle方法
+//_deferredState用来记录存储的实例状态
+//同一个promise对象下，_deferredState的值是随着then调用次数决定的，self.then().then()不是同一个promise对象
+
 function finale(self) {
   if (self._deferredState === 1) {
+    //只调用一次
     handle(self, self._deferreds)
     self._deferreds = null
   }
   if (self._deferredState === 2) {
+    //调用多次then 仅有调用self.then self.then时才会多个，单独的self.then().then()_deferredState还是为1
+
     for (var i = 0; i < self._deferreds.length; i++) {
+      // 所以这里就决定了同一条promise原型链上的then任务的优先级在同一等级，而then().then()的或者then(Promise.resolve().then(()=>{console.log('1111-1')}))的优先级在之后
       handle(self, self._deferreds[i])
     }
     self._deferreds = null
@@ -201,25 +220,37 @@ function Handler(onFulfilled, onRejected, promise) {
  *
  * Makes no guarantees about asynchrony.
  */
+/*
+ *
+ * @param {*} fn
+ * @param {*} promise=> this
+ * fn实际就是promise初始化时的匿名函数(resolve,reject)=>{}
+ * a和b则代表了resolve方法和reject方法
+ */
 function doResolve(fn, promise) {
   //done防止重复触发
   var done = false
   //tryCallTwo 用于处理并挂载resolve、reject方法
   //传入3个参数，Promise构造函数本身，resolve回调，reject回调
   var res = tryCallTwo(
+    //fn(resolve,reject)
     fn,
     function (value) {
+      //这个value从用户resolve传参拿到
       if (done) return
       done = true
-      //处理resolve方法
+      //处理resolve方法 所以使用代码里面在没有返回值时有没有resolve都不重要，在源码里面都会执行resolve或者reject
       resolve(promise, value)
     },
     function (reason) {
+      //这个reason从用户reject传参拿到
       if (done) return
       done = true
+      //处理reason
       reject(promise, reason)
     }
   )
+
   if (!done && res === IS_ERROR) {
     done = true
     reject(promise, LAST_ERROR)
