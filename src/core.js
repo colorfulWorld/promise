@@ -79,18 +79,25 @@ Promise._onReject = null //这是什么？
 Promise._noop = noop
 
 Promise.prototype.then = function (onFulfilled, onRejected) {
+  //接收两个参数resolve和reject函数
   if (this.constructor !== Promise) {
-    //new Promise 的constructor怎么会不是promise呢？直接修改.prototype.constructor的意义何在？
+    //实例的构造函数是不是Promise(防止外部修改prototype.constructor)
+    //直接修改prototype.constructor的意义何在？
+
+    //实例化外部实例的构造函数并返回实例
     return safeThen(this, onFulfilled, onRejected)
   }
   //then 是会新建一个promise 的，所以是要同一条原型链下的一级then有多个 _deferredState才会为复数
+  //创建一个空的Promise实例给res
   var res = new Promise(noop)
   handle(this, new Handler(onFulfilled, onRejected, res))
+  // 每次then处理完之后返回一个新的promise实例
   return res
 }
 
 function safeThen(self, onFulfilled, onRejected) {
   return new self.constructor(function (resolve, reject) {
+    //self.constructor外部实例的构造函数
     var res = new Promise(noop)
     res.then(resolve, reject)
     handle(self, new Handler(onFulfilled, onRejected, res))
@@ -98,6 +105,8 @@ function safeThen(self, onFulfilled, onRejected) {
 }
 function handle(self, deferred) {
   while (self._state === 3) {
+    //为什么是while 不是if？在这里是没有区别的啊
+    // resolve传入的是promise的实例，this（上下文）则改成传入的promise实例
     self = self._value
   }
   if (Promise._onHandle) {
@@ -120,9 +129,11 @@ function handle(self, deferred) {
   handleResolved(self, deferred)
 }
 
+//链式调用
 function handleResolved(self, deferred) {
   asap(function () {
     var cb = self._state === 1 ? deferred.onFulfilled : deferred.onRejected
+    //如果then没有回调，则手动回调
     if (cb === null) {
       if (self._state === 1) {
         resolve(deferred.promise, self._value)
@@ -131,6 +142,7 @@ function handleResolved(self, deferred) {
       }
       return
     }
+    //获取then的返回值，人后再次调用resolve，这样就完成了promise的链式调用
     var ret = tryCallOne(cb, self._value)
     if (ret === IS_ERROR) {
       reject(deferred.promise, LAST_ERROR)
@@ -211,7 +223,8 @@ function finale(self) {
 function Handler(onFulfilled, onRejected, promise) {
   this.onFulfilled = typeof onFulfilled === 'function' ? onFulfilled : null
   this.onRejected = typeof onRejected === 'function' ? onRejected : null
-  this.promise = promise
+  //
+  this.promise = promise //将promise挂载到Handler实例的promise下
 }
 
 /**
