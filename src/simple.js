@@ -17,24 +17,17 @@ function MyPromise(fn) {
   }
   this.resolvedCallbacks = []
   this.rejectedCallbacks = []
-  this._deferredState = 0
   this._state = PENDING
-  this._value = null
-  this._deferreds = null
+  this._value = null //使用原型链传参
 
   fn(resolve, reject)
 
   function resolve(value) {
-    //看到有些地方说这里要用箭头函数，因为被实例化之后会指向window，但是我觉得不对，实例化之后this不是指向的实例吗？
-    //有错误的是fn(this.resolve, this.reject).bind(this)这句内调
-    console.log(this)
     if (this._state === PENDING) {
       this._state = FULFILLED
       this._value = value
-      // console.log(this.resolvedCallbacks)
-      if (this.resolvedCallBacks.length) {
-        this.resolvedCallBacks.map((cb) => cb(value))
-      }
+      
+      this.resolvedCallBacks.map((cb) => cb(value))
     }
   }
   function reject(value) {
@@ -46,7 +39,7 @@ function MyPromise(fn) {
   }
 }
 
-MyPromise.prototype.then = function(onFulfilled, onRejected){
+MyPromise.prototype.then = function (onFulfilled, onRejected) {
   if (this._state === PENDING) {
     this.resolvedCallbacks.push(onFulfilled)
     this.rejectedCallbacks.push(onRejected)
