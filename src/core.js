@@ -1,6 +1,6 @@
 'use strict'
 
-var asap = require('asap/raw')
+//var asap = require('asap/raw')
 
 //定义空函数
 function noop() {}
@@ -52,7 +52,7 @@ function tryCallTwo(fn, a, b) {
   }
 }
 
-module.exports = Promise
+//module.exports = Promise
 
 //promise 构造函数
 function Promise(fn) {
@@ -131,25 +131,42 @@ function handle(self, deferred) {
 
 //链式调用
 function handleResolved(self, deferred) {
-  asap(function () {
-    var cb = self._state === 1 ? deferred.onFulfilled : deferred.onRejected
-    //如果then没有回调，则手动回调
-    if (cb === null) {
-      if (self._state === 1) {
-        resolve(deferred.promise, self._value)
-      } else {
-        reject(deferred.promise, self._value)
-      }
-      return
-    }
-    //获取then的返回值，人后再次调用resolve，这样就完成了promise的链式调用
-    var ret = tryCallOne(cb, self._value)
-    if (ret === IS_ERROR) {
-      reject(deferred.promise, LAST_ERROR)
+  // asap(function () {
+  //   var cb = self._state === 1 ? deferred.onFulfilled : deferred.onRejected
+  //   //如果then没有回调，则手动回调
+  //   if (cb === null) {
+  //     if (self._state === 1) {
+  //       resolve(deferred.promise, self._value)
+  //     } else {
+  //       reject(deferred.promise, self._value)
+  //     }
+  //     return
+  //   }
+  //   //获取then的返回值，人后再次调用resolve，这样就完成了promise的链式调用
+  //   var ret = tryCallOne(cb, self._value)
+  //   if (ret === IS_ERROR) {
+  //     reject(deferred.promise, LAST_ERROR)
+  //   } else {
+  //     resolve(deferred.promise, ret)
+  //   }
+  // })
+  var cb = self._state === 1 ? deferred.onFulfilled : deferred.onRejected
+  //如果then没有回调，则手动回调
+  if (cb === null) {
+    if (self._state === 1) {
+      resolve(deferred.promise, self._value)
     } else {
-      resolve(deferred.promise, ret)
+      reject(deferred.promise, self._value)
     }
-  })
+    return
+  }
+  //获取then的返回值，人后再次调用resolve，这样就完成了promise的链式调用
+  var ret = tryCallOne(cb, self._value)
+  if (ret === IS_ERROR) {
+    reject(deferred.promise, LAST_ERROR)
+  } else {
+    resolve(deferred.promise, ret)
+  }
 }
 function resolve(self, newValue) {
   // Promise Resolution Procedure: https://github.com/promises-aplus/promises-spec#the-promise-resolution-procedure
